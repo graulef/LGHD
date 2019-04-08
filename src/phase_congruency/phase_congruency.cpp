@@ -509,7 +509,8 @@ compute_filtering(fftwf_complex *f_output,
                   << ", az = "
                   << std::setfill('0') << std::setw(3) << azimuth
                   << ", el = "
-                  << std::setfill('0') << std::setw(3) << elevation;
+                  << std::setfill('0') << std::setw(3) << elevation
+                  << std::endl;
     #endif
 
     // Apply the log-Gabor filter.
