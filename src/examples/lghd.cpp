@@ -26,14 +26,18 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d.hpp>
 
-static const bool VERBOSE = false;
+const bool VERBOSE = false;
+const int detection_threshold = 10;
+const int high_quality_subset_size = 200;
+const int descriptor_length = 384;
+const int patch_size = 80;
+const int num_scales = 4;
+const int num_orientations = 6;
+const int subregion_factor = 4;
+const int num_bins = 6;
 
 
 std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
-    // TODO: Move to config
-    const int detection_threshold = 10;
-    const int high_quality_subset_size = 200;
-
     // Find keypoints using FAST detector
     cv::Ptr<cv::FastFeatureDetector> detector = cv::FastFeatureDetector::create(detection_threshold);
     std::vector<cv::KeyPoint> keypoints;
@@ -55,15 +59,6 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
 }
 
 cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints, std::string spectrum){
-
-    // TODO: Move to config
-    const int descriptor_length = 384;
-    const int patch_size = 80;
-    const int num_scales = 4;
-    const int num_orientations = 6;
-    const int subregion_factor = 4;
-    const int num_bins = 6;
-
     // LOG-GABOR FILTER COLLECTION
 
     // Create a bank of 2D log-Gabor filters (you can skip this if the
@@ -132,10 +127,10 @@ cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoi
     // DESCRIPTOR GENERATION
 
     // Define vector of descriptor vectors
-    std::vector<std::vector<float>> descriptors(keypoints.size());
+    std::vector<std::vector<float>> descriptors;
 
-    // Define boolean vector containing flags which keypoints should be ignored
-    std::vector<bool> ignore_kps(keypoints.size(), false);            // TODO: Add logic regarding ignored keypoints
+    // Count how many keypoints were ignored
+    int ignored_kps = 0;
 
     // Iterate over all keypoints extracting a patch around it and build the LGHD (Log-Gabor histogram descriptor)
     int kp_num = 0;
@@ -160,9 +155,7 @@ cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoi
 
         // ignore patches that are not well-sized
         if (y_2 - y_1 != patch_size || x_2 - x_1 != patch_size) {
-            ignore_kps.at(kp_num) = true;
-            descriptors.at(kp_num) = std::vector<float>(descriptor_length);
-            kp_num++;
+            ignored_kps++;
             continue;
         }
 
@@ -249,12 +242,13 @@ cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoi
         }
 
         // Add descriptor to overall collection
-        descriptors.at(kp_num) = descriptor;
-
-        std::cout << "Done with keypoint " << kp_num << "." << std::endl;
+        descriptors.push_back(descriptor);
 
         kp_num++;
     }
+
+    std::cout << "Generated descriptor for " << descriptors.size() << " keypoints." << std::endl;
+    std::cout << "Ignored " << ignored_kps << " keypoints while building descriptors." << std::endl;
 
     // Convert descriptors from vec of vec to OpenCV matrix
     cv::Mat lghd_descr(descriptors.size(), descriptors.at(0).size(), CV_32F);
@@ -291,8 +285,6 @@ int main(int argc, char *argv[])
 
     // Generate LGHD descriptor for infrared
     cv::Mat ir_descr = generate_lgdh_descriptor(ir_image, ir_kps, "ir");
-
-    // TODO: Ignore keypoints that do not have a descriptor in both images
 
     // Use Brute-Force matcher to match descriptors
     cv::BFMatcher matcher(cv::NORM_L2, true);
