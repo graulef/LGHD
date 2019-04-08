@@ -424,6 +424,62 @@ compute()
 }
 
 
+std::vector<cv::Mat>
+phase_congruency::
+compute_eo_collection() {
+    // Define collection data structure as vector of images
+    std::vector<cv::Mat> eo_collection;
+
+    // Iterate over all scales and all orientations
+    for (int s = 0; s < m_filter_bank->get_num_scales(); s++){
+        for (int o = 0; o < m_filter_bank->get_num_azimuths(); o++){
+
+            // Get the total sizes in space and frequency domains.
+            const size_t total_size   = m_sizes[0] * m_sizes[1];
+            const size_t f_total_size = total_size * sizeof(fftwf_complex);
+
+            // Allocate data for the Fourier transform of the input image.
+            fftwf_complex *f_input_image = (fftwf_complex*) fftwf_malloc(f_total_size);
+
+            // Allocate array of filtered image in the frequency domain.
+            fftwf_complex *f_filtered_image = (fftwf_complex*) fftwf_malloc(f_total_size);
+
+            if (!f_input_image || !f_filtered_image)
+                throw std::bad_alloc();
+
+            // Compute the input image's Fourier transform (shifted).
+            compute_shifted_FFT(f_input_image);
+
+            // Apply a single log-Gabor filter (in the frequency domain) to the input image.
+            compute_filtering(f_filtered_image, f_input_image, s, o, 0);
+
+            // Prepare OpenCV matrix for image to be stored in
+            cv::Mat eo(cv::Size(m_sizes[0], m_sizes[1]), CV_32F);
+
+            // Accumulate amplitudes of filter responses (real and imaginary part).
+            for (size_t i = 0; i < total_size; ++i) {
+                const float even = f_filtered_image[i][0];
+                const float odd = f_filtered_image[i][1];
+
+                const float absolute = std::sqrt(std::pow(even, 2) + std::pow(odd, 2));
+
+                // Write pixel to overall image
+                eo.at<float>(i) = absolute;
+            }
+
+            // Store full image in collection data structure
+            eo_collection.push_back(eo);
+
+            // Clean up allocated memory and threads from FFTW
+            fftwf_free(f_filtered_image);
+            fftwf_free(f_input_image);
+            fftwf_cleanup_threads();
+        }
+    }
+    return eo_collection;
+}
+
+
 void
 phase_congruency::
 compute_shifted_FFT(fftwf_complex *f_target)

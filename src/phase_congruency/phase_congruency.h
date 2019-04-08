@@ -30,6 +30,7 @@
 #include "math_functions.h"
 #include "image_io.h"
 #include "log_gabor_filter_bank.h"
+#include "opencv2/core/core.hpp"
 
 #define PHASE_CONGRUENCY_VERBOSE_ON
 // #define PHASE_CONGRUENCY_DEBUG_ON
@@ -88,6 +89,11 @@ public:
      */
     void compute();
 
+    /**
+     * @brief Computes the edge orientation image collection (Log-Gabor filtered images over all scales and orientations)
+     * */
+    std::vector<cv::Mat> compute_eo_collection();
+
     /** @brief Getter for m_filename_prefix. */
     std::string get_filename_prefix() const {
         return m_filename_prefix;
@@ -135,12 +141,12 @@ public:
 
 private:
     /**
-     * @brief Computes the DC-shifted forward FFT of the input image.
-     *
-     * @param[out] target Preallocated complex image to compute.
-     *
-     * @return The resulting Fourier transform as a complex image.
-     */
+      * @brief Computes the DC-shifted forward FFT of the input image.
+      *
+      * @param[out] target Preallocated complex image to compute.
+      *
+      * @return The resulting Fourier transform as a complex image.
+      */
     void compute_shifted_FFT(fftwf_complex *f_target);
 
     /**
