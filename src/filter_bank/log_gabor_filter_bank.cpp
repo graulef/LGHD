@@ -361,24 +361,23 @@ create_filter(float freq0, float phi0, float theta0)
                     float vv = v * cos_theta_sin_phi;
                     float ww = w * sin_theta;
 
-                    // Angular distance between the central frequency point
-                    // and the current sample point.
-                    float alpha = acos((uu + vv + ww) / (freq + EPSILON));
-
-                    // Angular and radial components in the frequency domain.
-                    float spread = exp(-0.5 * sqr(alpha / std_alpha));
-                    float radius = exp(-0.5 * sqr(log(freq / freq0) /
-                                                  log(m_frequency_ratio)));
-
                     // // Angular distance between the central frequency point
-                    // // and the current sample.
-                    // float alpha = fabs(acos((uu + vv + ww) / (freq + EPSILON)));
-                    // alpha = std::min(alpha * m_num_azimuths/2.0, M_PI);
+                    // // and the current sample point.
+                    // float alpha = acos((uu + vv + ww) / (freq + EPSILON));
 
                     // // Angular and radial components in the frequency domain.
-                    // float spread = 0.5 * (1 + cos(alpha));
+                    // float spread = exp(-0.5 * sqr(alpha / std_alpha));
                     // float radius = exp(-0.5 * sqr(log(freq / freq0) /
-                    //                               log(m_frequency_ratio)));
+                    //                              log(m_frequency_ratio)));
+
+                    // Angular distance between the central frequency point
+                    // and the current sample.
+                    float alpha = fabs(acos((uu + vv + ww) / (freq + EPSILON)));
+                    alpha = std::min(alpha * m_num_azimuths/2.0, M_PI);
+
+                    // Angular and radial components in the frequency domain.
+                    float spread = 0.5 * (1 + cos(alpha));
+                    float radius = exp(-0.5 * sqr(log(freq / freq0) / log(m_frequency_ratio)));
 
                     // Apply a Butterworth low-pass filter.
                     radius /= (1 + pow((freq / m_lowpass_cutoff),
