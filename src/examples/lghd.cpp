@@ -275,14 +275,14 @@ cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoi
 int main(int argc, char *argv[])
 {
     // Load RGB image & detect keypoints
-    const cv::Mat rgb_image = cv::imread("data/20160719_191350.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat rgb_image = cv::imread("test_images/1_rgb.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> rgb_kps = get_keypoints(rgb_image, "rgb");
 
     // Generate LGHD descriptor for RGB
     cv::Mat rgb_descr = generate_lgdh_descriptor(rgb_image, rgb_kps, "rgb");
 
     // Load infrared image & detect keypoints
-    const cv::Mat ir_image = cv::imread("data/20160719_191349.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat ir_image = cv::imread("test_images/1_ir.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> ir_kps = get_keypoints(ir_image, "ir");
 
     // Generate LGHD descriptor for infrared
