@@ -1,5 +1,3 @@
-Attention: to compile this, you also need vtk-5 installed. However, that conflicts with having vtk-6 installed which in turn is required for the ros-pcl package. Currently trying to figure out a way around this.
-
 This is a C++ implementation of the Log-Gabor Histogram descriptor (LGHD) proposed by Cristhian Aguilera and Angel D. Sappa and Ricardo Toledo in 2015. For further information on their work, please refer to the LGHD section below or to https://github.com/ngunsu/LGHD.
 
 The code itself is largely based on a C++ implementation of Log-Gabor-based Phase Congruency generation by Carlos H Villa Pinto. For further information on his implementation and install instructions for dependencies, please refer to the Phase Congurency section below or to https://github.com/chvillap/phase-congruency-features. 
@@ -62,6 +60,8 @@ More details about phase congruency and some of its applications can be found in
 - [FFTW 3.3](http://www.fftw.org)
 - [GSL 2.2](https://www.gnu.org/software/gsl)
 - [ITK 4.10](https://www.itk.org)
+
+In case you are experiencing troubles connected to VTK: I recommend installing vtk-6, since it is also used for ROS packages like ros-pcl and having both vtk-5 & vtk-6 is not possible. However, having vtk-6 installed will lead to CMake warnings. See here how to get rid of them: https://github.com/autowarefoundation/autoware/issues/795 
 
 ## Notes
 
