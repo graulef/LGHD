@@ -28,7 +28,7 @@
 
 const bool VERBOSE = false;
 const int detection_threshold = 10;
-const int high_quality_subset_size = 200;
+const int high_quality_subset_size = 500;
 const int descriptor_length = 384;
 const int patch_size = 80;
 const int num_scales = 4;
@@ -63,13 +63,17 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
 cv::Mat generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints, std::string spectrum){
     // LOG-GABOR FILTER COLLECTION
 
+    // Create folder to store filters in
+    mkdir("./filters", 0777);  
+
     // Create a bank of 2D log-Gabor filters (you can skip this if the
     // filters already exist in the disk).
     int width = image.cols;
     int height = image.rows;
     bip::triple<size_t> size = {width, height, 1};
+
     bip::log_gabor_filter_bank lgbf(
-            "log_gabor",            // Filename prefix.
+            "filters/log_gabor",            // Filename prefix.
             size,                   // Filter size (z=1 for 2D).
             num_scales,             // Scales.
             num_orientations,       // Azimuths.
