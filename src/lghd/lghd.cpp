@@ -198,7 +198,7 @@ void generate_lgdh_descriptor(const cv::Mat& image_in, const std::vector<cv::Key
     // Clean up memory
     delete[] image_array;
 
-    // Write phase congruency of input image to disk
+    // DEBUG: Store phase congruency image
     if (VERBOSE) {
         for (int i = 0; i < num_orientations*num_scales; i++){
             int scale = round(i / num_orientations);
@@ -347,7 +347,7 @@ void generate_lgdh_descriptor(const cv::Mat& image_in, const std::vector<cv::Key
         }
     }
 
-    // Store descriptors to disk
+    // DEBUG: Store descriptors
     if (VERBOSE) {
         char descr_filename[32];
         sprintf(descr_filename, "%s/debug/descriptors.json", data_dir.c_str());
