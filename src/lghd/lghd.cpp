@@ -9,15 +9,21 @@
  * @license GPL v2.0
  */
 
+// SYSTEM
 #include <iostream>
 #include <string>
+#include <dirent.h>
+
+// PROJECT
 #include "types.h"
 #include "image_io.h"
 #include "log_gabor_filter_bank.h"
 #include "phase_congruency.h"
 
+// ITK
 #include <itkOpenCVImageBridge.h>
 
+// OpenCV
 #include "opencv2/core/core.hpp"
 #include "opencv2/core/utility.hpp"
 #include "opencv2/imgproc.hpp"
@@ -25,13 +31,19 @@
 #include "opencv2/highgui.hpp"
 #include <opencv2/features2d.hpp>
 
+// TODO: Move this into config file
+// Data & Debug
 const std::string data_dir = "../..";
-const bool VERBOSE = true;
+const std::string save_filters_dir = data_dir + "/filters";
+const bool VERBOSE = false;
+
+// Feature detection
 const int detection_threshold = 10;
-const double min_hessian = 400.0;
-const int high_quality_subset_size = 1000;
+const int high_quality_subset_size = 400;
+
+// LGHD descriptor
 const int descriptor_length = 384;
-const int patch_size = 80;
+const int patch_size = 100;
 const int num_scales = 4;
 const int num_orientations = 6;
 const int subregion_factor = 4;
@@ -93,25 +105,17 @@ void adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
 }
 
 std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
-    // Define vector for keypoints
+    // Find FAST keypoints
     std::vector<cv::KeyPoint> keypoints;
-    
-    // Find keypoints using FAST detector
     cv::Ptr<cv::FastFeatureDetector> detector = cv::FastFeatureDetector::create(detection_threshold);
-    
-    // // Find keypoint using SURF detector
-    // cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create(min_hessian);
-    
-    // Detect keypoints
     detector->detect(image, keypoints);
 
-    std::cout << "Found " << keypoints.size() << " keypoints in total." << std::endl;
+    // Only use high quality subset of all keypoints based on ANMS
+    adaptiveNonMaximalSuppresion(keypoints, high_quality_subset_size);
 
-    // Only use high quality subset of all keypoints
-    cv::KeyPointsFilter::retainBest(keypoints, high_quality_subset_size);
     std::cout << "Building descriptors for the " << keypoints.size() << " strongest keypoints." << std::endl;
 
-    // Save image with kept keypoints to disk
+    // DEBUG: store image with good keypoints
     if (VERBOSE) {
         cv::Mat draw;
         cv::drawKeypoints(image, keypoints, draw);
@@ -123,22 +127,28 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
     return keypoints;
 }
 
-void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints_in, std::string spectrum,
-			      std::vector<cv::KeyPoint>* keypoints_out, cv::Mat* descriptors_out){
+void generate_lgdh_descriptor(const cv::Mat& image_in, const std::vector<cv::KeyPoint>& keypoints_in,
+			                  std::vector<cv::KeyPoint>* keypoints_out, cv::Mat* descriptors_out){
+
     // LOG-GABOR FILTER COLLECTION
+    const unsigned int width = image_in.cols;
+    const unsigned int height = image_in.rows;
 
-    // Create folder to store filters in
-    std::string save_filters_dir = data_dir + "/filters/";
-    mkdir(save_filters_dir.c_str(), 0777);  
+    // Check if filter directory exists
+    std::string save_filters_dir_local = save_filters_dir + "_" + std::to_string(width) + "_" + std::to_string(height) + "/";
+    bool generate_new_filters = true;
+    struct stat st;
+    if(stat(save_filters_dir_local.c_str(), &st) == 0) {
+        if (st.st_mode & S_IFDIR != 0) {
+            generate_new_filters = false;
+        }
+    }
 
-    // Create a bank of 2D log-Gabor filters (you can skip this if the
-    // filters already exist in the disk).
-    int width = image.cols;
-    int height = image.rows;
+    // Create a bank of 2D log-Gabor filters (you can skip this if the filters already exist in the disk).
     bip::triple<size_t> size = {width, height, 1};
 
-    bip::log_gabor_filter_bank lgbf(
-            save_filters_dir,       // Filename prefix.
+    bip::log_gabor_filter_bank lg_filter(
+            save_filters_dir_local, // Filename prefix.
             size,                   // Filter size (z=1 for 2D).
             num_scales,             // Scales.
             num_orientations,       // Azimuths.
@@ -151,23 +161,29 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
             0.45,                   // Butterworth cutoff.
             false                   // Uniform sampling?
     );
-    bip::log_gabor_filter_bank::write_parameters(lgbf);
-    lgbf.compute();
+
+    if (generate_new_filters) {
+        // Create folder to store filters in
+        mkdir(save_filters_dir_local.c_str(), 0777);
+        bip::log_gabor_filter_bank::write_parameters(lg_filter);
+
+        // Compute filters
+        lg_filter.compute();
+    }
 
     // Convert OpenCV image to ITK image
-    itk::Image<float,3>::Pointer itk_image = itk::OpenCVImageBridge::CVMatToITKImage<itk::Image<float,3>>(image);
+    itk::Image<float,3>::Pointer itk_image = itk::OpenCVImageBridge::CVMatToITKImage<itk::Image<float,3>>(image_in);
 
     // Convert ITK image to array
     float *image_array;
     image_array = new float[width*height];
     image_array = bip::io::image2array<float, 3>(itk_image);
 
-    // Apply the phase congruency technique to detect edges and corners
-    // and other features in the 2D input image.
-    bip::phase_congruency pc(
+    // Apply the phase congruency technique to detect edges and corners and other features in the 2D input image.
+    bip::phase_congruency phase_cong(
             save_filters_dir,       // Filename prefix.
             image_array,            // Input image.
-            &lgbf,                  // Bank of log-gabor filters.
+            &lg_filter,             // Bank of log-gabor filters.
             size,                   // Image size (z=1 for 2D).
             NULL,                   // Input mask (NULL for no mask).
             -1.0,                   // Noise energy threshold (< 0 for auto estimation).
@@ -177,7 +193,7 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
     );
 
     // Compute Log-Gabor filtered images over all scales and orientations
-    std::vector<cv::Mat> eo_collection = pc.compute_eo_collection();
+    std::vector<cv::Mat> eo_collection = phase_cong.compute_eo_collection();
 
     // Clean up memory
     delete[] image_array;
@@ -188,7 +204,7 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
             int scale = round(i / num_orientations);
             int orientation = i - scale * num_orientations;
             char filename[64];
-            sprintf(filename, "%s/debug/%s_%01u_orientation_%01u.jpg", data_dir.c_str(), spectrum.c_str(), scale + 1, orientation + 1);
+            sprintf(filename, "%s/debug/%01u_orientation_%01u.jpg", data_dir.c_str(), scale + 1, orientation + 1);
             cv::Mat current_image = eo_collection[scale * num_orientations + orientation];
             current_image.convertTo(current_image, CV_8U, 255.0);
             cv::imwrite(filename, current_image);
@@ -197,7 +213,7 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
 
     // DESCRIPTOR GENERATION
 
-    // Define vector of descriptor vectors
+    // Define keypoint and descriptor vectors
     std::vector<cv::KeyPoint> valid_keypoints;
     std::vector<std::vector<float>> valid_descriptors;
 
@@ -219,8 +235,8 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
         // Get top-left point of patch
         int x_1 = std::max(1, x - patch_half);
         int y_1 = std::max(1, y - patch_half);
-        int x_2 = std::min(x + patch_half, width);
-        int y_2 = std::min(y + patch_half, height);
+        int x_2 = std::min(x + patch_half, static_cast<int>(width));
+        int y_2 = std::min(y + patch_half, static_cast<int>(height));
 
         // Define patch as rectangular region of interest
         cv::Rect patch_roi(x_1, y_1, x_2-x_1, y_2-y_1);
@@ -231,7 +247,7 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
             continue;
         }
 
-        // iterate over all scales building a partial descriptor for each
+        // iterate over all scales building a partial descriptor for each (eo stands for edge orientation)
         for (int s = 0; s < num_scales; s++) {
             // Allocate memory for each patch (get updated) and overall maximum patch
             cv::Mat eo_patch = cv::Mat::zeros(cv::Size(patch_size, patch_size), CV_32F);
@@ -262,9 +278,9 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
             }
 
             // Set parameters for histogram generation
-            int histSize = num_orientations;
+            int hist_size = num_orientations;
             float range[] = {0.0, 1.0 * (num_orientations-1)};
-            const float* histRange = {range};
+            const float* hist_range = {range};
             int subregion_size = round(patch_size / subregion_factor);
 
             // Divide patch into subregions
@@ -275,13 +291,13 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
                     cv::Rect subregion_roi(i*subregion_size, j*subregion_size, subregion_size, subregion_size);
 
                     // Load subregion as subpatch from maximized filtered images
-                    const cv::Mat imageHist = max_idx_eo_patch(subregion_roi);
+                    const cv::Mat hist_image = max_idx_eo_patch(subregion_roi);
 
                     // Define histogram result container
                     cv::Mat hist(cv::Size(1, num_orientations), CV_32F);
 
                     // Calculate histogram (uniform sampling, no accumulation)
-                    cv::calcHist(&imageHist, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange, true, false);
+                    cv::calcHist(&hist_image, 1, 0, cv::Mat(), hist, 1, &hist_size, &hist_range, true, false);
 
                     // Convert histogram matrix to vector of floats
                     std::vector<float> hist_vec;
@@ -314,7 +330,7 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
         }
 
         // Add keypoint and descriptor to overall collection
-	valid_keypoints.push_back(kp);
+	    valid_keypoints.push_back(kp);
         valid_descriptors.push_back(descriptor);
 
         kp_num++;
@@ -324,46 +340,45 @@ void generate_lgdh_descriptor(cv::Mat image, std::vector<cv::KeyPoint> keypoints
     std::cout << "Ignored " << ignored_kps << " keypoints while building descriptors." << std::endl;
 
     // Convert descriptors from vec of vec to OpenCV matrix
-    cv::Mat lghd_descr(valid_descriptors.size(), valid_descriptors.at(0).size(), CV_32F);
-    for (int i = 0; i < lghd_descr.rows; ++i) {
-        for (int j = 0; j < lghd_descr.cols; ++j) {
-            lghd_descr.at<float>(i, j) = valid_descriptors.at(i).at(j);
+    cv::Mat descr(valid_descriptors.size(), valid_descriptors.at(0).size(), CV_32F);
+    for (int i = 0; i < descr.rows; ++i) {
+        for (int j = 0; j < descr.cols; ++j) {
+            descr.at<float>(i, j) = valid_descriptors.at(i).at(j);
         }
     }
 
     // Store descriptors to disk
     if (VERBOSE) {
         char descr_filename[32];
-        sprintf(descr_filename, "%s/debug/%s_descriptors.json", data_dir.c_str(), spectrum.c_str());
+        sprintf(descr_filename, "%s/debug/descriptors.json", data_dir.c_str());
         cv::FileStorage descr_file(descr_filename, cv::FileStorage::WRITE);
-        descr_file << "matName" << lghd_descr;
+        descr_file << "matName" << descr;
     }
 
     // Assign results to output pointers
     *keypoints_out = valid_keypoints;
-    *descriptors_out = lghd_descr;
+    *descriptors_out = descr;
 }
 
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     // Load RGB image & detect keypoints
-    const cv::Mat rgb_image = cv::imread(data_dir + "/test_images/3_rgb.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat rgb_image = cv::imread(data_dir + "/test_images/9_rgb.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> rgb_kps_detected = get_keypoints(rgb_image, "rgb");
 
     // Generate LGHD descriptor for RGB
     std::vector<cv::KeyPoint> rgb_kps;
     cv::Mat rgb_descr;
-    generate_lgdh_descriptor(rgb_image, rgb_kps_detected, "rgb", &rgb_kps, &rgb_descr);
+    generate_lgdh_descriptor(rgb_image, rgb_kps_detected, &rgb_kps, &rgb_descr);
 
     // Load infrared image & detect keypoints
-    const cv::Mat ir_image = cv::imread(data_dir + "/test_images/3_ir.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat ir_image = cv::imread(data_dir + "/test_images/9_ir.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> ir_kps_detected = get_keypoints(ir_image, "ir");
 
     // Generate LGHD descriptor for infrared
     std::vector<cv::KeyPoint> ir_kps;
     cv::Mat ir_descr;
-    generate_lgdh_descriptor(ir_image, ir_kps_detected, "ir", &ir_kps, &ir_descr);
+    generate_lgdh_descriptor(ir_image, ir_kps_detected, &ir_kps, &ir_descr);
 
     // Use Brute-Force matcher to match descriptors
     cv::BFMatcher matcher(cv::NORM_L2, true);	
