@@ -24,7 +24,6 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d.hpp>
 
 const std::string data_dir = "../..";
 const bool VERBOSE = true;
@@ -36,9 +35,62 @@ const int patch_size = 80;
 const int num_scales = 4;
 const int num_orientations = 6;
 const int subregion_factor = 4;
-const int GOOD_PTS_MAX = 50;
-const float GOOD_PORTION = 0.15f;
 
+// Adaptive Non-Maximum Suppression (see paper)
+const float robust_coeff = 1.11;
+
+// Selection of matches based on percentile
+const int good_points_max = 200; // 50
+const float good_points_portion = 1.0f; // 0.15f
+
+
+// Implementation guided by the paper "Multi-Image Matching using Multi-Scale Oriented Patches" by Brown, Szeliski, and Winder.
+void adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
+                                   const int num_keep) {
+    // Nothing to be maximized
+    if(keypoints.size() < num_keep) {
+        return;
+    }
+
+    // Sort by response to detection filter
+    std::sort(keypoints.begin(), keypoints.end(),
+               [&](const cv::KeyPoint& lhs, const cv::KeyPoint& rhs) {
+                   return lhs.response > rhs.response;
+               });
+
+    std::vector<cv::KeyPoint> anms_points;
+    std::vector<double> radii;
+    radii.resize(keypoints.size());
+    std::vector<double> radii_sorted;
+    radii_sorted.resize(keypoints.size());
+
+    // Create list of keypoints sorted by maximum-response radius
+    for(int i = 0; i < keypoints.size(); ++i) {
+        const float response = keypoints[i].response * robust_coeff;
+        double radius = std::numeric_limits<double>::max();
+        for(int j = 0; j < i && keypoints[j].response > response; ++j) {
+            radius = std::min(radius, cv::norm(keypoints[i].pt - keypoints[j].pt));
+        }
+        radii[i]       = radius;
+        radii_sorted[i] = radius;
+    }
+
+    std::sort(radii_sorted.begin(), radii_sorted.end(),
+               [&](const double& lhs, const double& rhs) {
+                   return lhs > rhs;
+               } );
+
+    // Only keep keypoints with highest radii
+    const double decision_radius = radii_sorted[num_keep];
+    for(int i = 0; i < radii.size(); ++i) {
+        if(radii[i] >= decision_radius) {
+            anms_points.push_back(keypoints[i]);
+        }
+    }
+
+    // Allocate result to output
+    anms_points.swap(keypoints);
+}
 
 std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
     // Define vector for keypoints
@@ -327,7 +379,7 @@ int main(int argc, char *argv[])
     double minDist = matches.front().distance;
     double maxDist = matches.back().distance;
 
-    const int ptsPairs = std::min(GOOD_PTS_MAX, (int)(matches.size() * GOOD_PORTION));
+    const int ptsPairs = std::min(good_points_max, (int)(matches.size() * good_points_portion));
     for( int i = 0; i < ptsPairs; i++ )
     {
         good_matches.push_back(matches[i]);
