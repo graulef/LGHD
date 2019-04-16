@@ -38,27 +38,3 @@ SET_PROPERTY(
     TARGET ${LIBRARY_NAME}
     PROPERTY CXX_STANDARD_REQUIRED ON)
 
-# -------------------------------------------------------------------------------------------------
-
-SET(PROGRAM_NAME
-    "phase_congruency"
-)
-SET(PROGRAM_SOURCE_FILES
-    "main.cpp"
-)
-ADD_EXECUTABLE(
-    ${PROGRAM_NAME}
-    ${PROGRAM_SOURCE_FILES}
-)
-TARGET_LINK_LIBRARIES(
-    ${PROGRAM_NAME}
-    bip_utils
-    bip_filter_bank
-    ${LIBRARY_NAME}
-)
-SET_PROPERTY(
-    TARGET ${PROGRAM_NAME}
-    PROPERTY CXX_STANDARD 14)
-SET_PROPERTY(
-    TARGET ${PROGRAM_NAME}
-    PROPERTY CXX_STANDARD_REQUIRED ON)
