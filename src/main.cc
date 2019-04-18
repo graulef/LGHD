@@ -109,6 +109,10 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
     return keypoints;
 }
 
+
+
+
+
 int main(int argc, char *argv[]) {
 
     const std::string load_data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";

@@ -31,6 +31,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/features2d.hpp>
 
+
 LGHD::LGHD(const unsigned int descriptor_length,
            const unsigned int patch_size,
            const unsigned int num_scales,
@@ -49,8 +50,10 @@ LGHD::LGHD(const unsigned int descriptor_length,
            save_debug_dir_(save_debug_dir){
 }
 
+
 LGHD::~LGHD() {
 }
+
 
 void LGHD::generate_descriptor(const cv::Mat& image_in,
                                const std::vector<cv::KeyPoint>& keypoints_in,
