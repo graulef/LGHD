@@ -1,3 +1,2 @@
-src/build/
-filters/
-results/
+data/results
+data/filters*
