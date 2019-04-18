@@ -57,12 +57,28 @@ class LGHD {
      */
 
     void generate_descriptor(const cv::Mat& image_in,
-                             const std::vector<cv::KeyPoint>& keypoints_in,
 	                         std::vector<cv::KeyPoint>* keypoints_out,
 	                         cv::Mat* descriptors_out);
 
   private:
-    // LGHD descriptor
+    void adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
+                                      const int num_keep);
+    // TODO: Move parameters to config
+    // TODO: Add spectrum to create more meaningful debug files
+
+    // Feature detection
+    const int detection_threshold = 10;
+    const int high_quality_subset_size = 400;
+
+    // Adaptive Non-Maximum Suppression (see paper)
+    const float robust_coeff = 1.11;
+
+    // Selection of matches based on percentile
+    const int good_points_max = 200; // 50
+    const float good_points_portion = 1.0f; // 0.15f
+
+    const bool use_pc_maps_detection_ = false;
+
     const unsigned int descriptor_length_;
     const unsigned int patch_size_;
     const unsigned int num_scales_;

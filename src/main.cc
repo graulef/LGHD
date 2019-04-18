@@ -120,23 +120,21 @@ int main(int argc, char *argv[]) {
     // Create descriptor object with default settings (reused for both spectra)
     LGHD lghd_descr_obj;
 
-    // Load RGB image & detect keypoints
+    // Load RGB image
     const cv::Mat rgb_image = cv::imread(load_data_dir + "/test_images/9_rgb.jpg", cv::IMREAD_GRAYSCALE);
-    std::vector<cv::KeyPoint> rgb_kps_detected = get_keypoints(rgb_image, "rgb");
 
     // Generate LGHD descriptor for RGB
     std::vector<cv::KeyPoint> rgb_kps;
     cv::Mat rgb_descr;
-    lghd_descr_obj.generate_descriptor(rgb_image, rgb_kps_detected, &rgb_kps, &rgb_descr);
+    lghd_descr_obj.generate_descriptor(rgb_image, &rgb_kps, &rgb_descr);
 
-    // Load infrared image & detect keypoints
+    // Load infrared image
     const cv::Mat ir_image = cv::imread(load_data_dir + "/test_images/9_ir.jpg", cv::IMREAD_GRAYSCALE);
-    std::vector<cv::KeyPoint> ir_kps_detected = get_keypoints(ir_image, "ir");
 
     // Generate LGHD descriptor for infrared
     std::vector<cv::KeyPoint> ir_kps;
     cv::Mat ir_descr;
-    lghd_descr_obj.generate_descriptor(ir_image, ir_kps_detected, &ir_kps, &ir_descr);
+    lghd_descr_obj.generate_descriptor(ir_image, &ir_kps, &ir_descr);
 
     // Use Brute-Force matcher to match descriptors
     cv::BFMatcher matcher(cv::NORM_L2, true);	

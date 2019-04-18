@@ -10,8 +10,6 @@
 #include <iostream>
 #include <string>
 #include <dirent.h>
-#include <sys/stat.h>
-#include <errno.h>
 
 // PROJECT
 #include "types.h"
@@ -55,9 +53,57 @@ LGHD::~LGHD() {
 }
 
 
+// Implementation guided by the paper "Multi-Image Matching using Multi-Scale Oriented Patches" by Brown, Szeliski, and Winder.
+void LGHD::adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
+                                        const int num_keep) {
+    // Nothing to be maximized
+    if(keypoints.size() < num_keep) {
+        return;
+    }
+
+    // Sort by response to detection filter
+    std::sort(keypoints.begin(), keypoints.end(),
+              [&](const cv::KeyPoint& lhs, const cv::KeyPoint& rhs) {
+                  return lhs.response > rhs.response;
+              });
+
+    std::vector<cv::KeyPoint> anms_points;
+    std::vector<double> radii;
+    radii.resize(keypoints.size());
+    std::vector<double> radii_sorted;
+    radii_sorted.resize(keypoints.size());
+
+    // Create list of keypoints sorted by maximum-response radius
+    for(int i = 0; i < keypoints.size(); ++i) {
+        const float response = keypoints[i].response * robust_coeff;
+        double radius = std::numeric_limits<double>::max();
+        for(int j = 0; j < i && keypoints[j].response > response; ++j) {
+            radius = std::min(radius, cv::norm(keypoints[i].pt - keypoints[j].pt));
+        }
+        radii[i]       = radius;
+        radii_sorted[i] = radius;
+    }
+
+    std::sort(radii_sorted.begin(), radii_sorted.end(),
+              [&](const double& lhs, const double& rhs) {
+                  return lhs > rhs;
+              } );
+
+    // Only keep keypoints with highest radii
+    const double decision_radius = radii_sorted[num_keep];
+    for(int i = 0; i < radii.size(); ++i) {
+        if(radii[i] >= decision_radius) {
+            anms_points.push_back(keypoints[i]);
+        }
+    }
+
+    // Allocate result to output
+    anms_points.swap(keypoints);
+}
+
+
 void LGHD::generate_descriptor(const cv::Mat& image_in,
-                               const std::vector<cv::KeyPoint>& keypoints_in,
-			       		       std::vector<cv::KeyPoint>* keypoints_out,
+                               std::vector<cv::KeyPoint>* keypoints_out,
 			       		       cv::Mat* descriptors_out) {
     // LOG-GABOR FILTER COLLECTION
     const unsigned int width = image_in.cols;
@@ -79,12 +125,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
         // Create folder to store filters in
         int mkdir_errno;
         mkdir_errno = mkdir(cache_filters_dir_local.c_str(), 0777);
-
-        std::cout << "dir: " << cache_filters_dir_local << std::endl;
-        std::cout << "errno: " << mkdir_errno << std::endl;
-        std::cout << "errno: " << errno << std::endl;
-
-        assert(mkdir_errno = 0);
+        assert(mkdir_errno == 0);
     }
 
     // Create a bank of 2D log-Gabor filters (you can skip this if the filters already exist in the disk).
@@ -132,6 +173,37 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
             0.5                     // Sigmoid weighting cutoff.
     );
 
+
+    // KEYPOINT DETECTION
+
+    cv::Mat keypoint_image;
+    if (use_pc_maps_detection_) {
+        // Generate overall phase congruency map to find features on
+        keypoint_image = phase_cong.compute_overall_pc_map();
+    } else {
+        // Use normal input image to find features on
+        keypoint_image = image_in;
+    }
+
+    // Find FAST keypoints
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Ptr<cv::FastFeatureDetector> detector = cv::FastFeatureDetector::create(detection_threshold);
+    detector->detect(keypoint_image, keypoints);
+
+    // Only use high quality subset of all keypoints based on ANMS
+    adaptiveNonMaximalSuppresion(keypoints, high_quality_subset_size);
+
+    std::cout << "Building descriptors for the " << keypoints.size() << " strongest keypoints." << std::endl;
+
+    // DEBUG: store image with good keypoints
+    if (debug_) {
+        cv::Mat draw;
+        cv::drawKeypoints(keypoint_image, keypoints, draw);
+        char keypoint_filename[32];
+        sprintf(keypoint_filename, "%s/keypoints.jpg", save_debug_dir_.c_str());
+        cv::imwrite(keypoint_filename, draw);
+    }
+
     // Compute Log-Gabor filtered images over all scales and orientations
     std::vector<cv::Mat> eo_collection = phase_cong.compute_eo_collection();
 
@@ -151,6 +223,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
         }
     }
 
+
     // DESCRIPTOR GENERATION
 
     // Define keypoint and descriptor vectors
@@ -164,7 +237,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
     int kp_num = 0;
     const int patch_half = floor(patch_size_/2);
 
-    for (auto const& kp : keypoints_in) {
+    for (auto const& kp : keypoints) {
         // Define vector holding the actual descriptor
         std::vector<float> descriptor;
 

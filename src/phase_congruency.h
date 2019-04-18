@@ -27,7 +27,7 @@
 #include "math_functions.h"
 #include "image_io.h"
 #include "log_gabor_filter_bank.h"
-#include "opencv2/core/core.hpp"
+#include <opencv2/core/core.hpp>
 
 #define PHASE_CONGRUENCY_VERBOSE_ON
 // #define PHASE_CONGRUENCY_DEBUG_ON
@@ -80,7 +80,7 @@ class phase_congruency {
     /**
      * @brief Computes the phase congruency technique on the input image.
      */
-    void compute();
+    cv::Mat compute_overall_pc_map();
 
     /**
      * @brief Computes the edge orientation image collection (Log-Gabor filtered images over all scales and orientations)
