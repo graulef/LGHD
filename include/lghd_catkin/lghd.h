@@ -1,9 +1,5 @@
 /**
  * @file   lgdh.h
- * @author Felix Graule
- *
- * @addtogroup none
- * @ingroup    none
  *
  * @copyright Copyright (c) 2019 Felix Graule
  * @license GPL v2.0
@@ -17,14 +13,8 @@
 #include <string>
 #include <dirent.h>
 
-
 // OpenCV
 #include "opencv2/core/core.hpp"
-#include "opencv2/core/utility.hpp"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
-#include <opencv2/features2d.hpp>
 
 
 class LGHD {
@@ -35,7 +25,7 @@ class LGHD {
   private:
     // TODO: Move this into config file
     // Data & Debug
-    const std::string data_dir = "../..";
+    const std::string data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";
     const std::string save_filters_dir = data_dir + "/filters";
     const bool VERBOSE = false;
 

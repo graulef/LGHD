@@ -20,7 +20,7 @@
 #include <opencv2/features2d.hpp>
 
 // PROJECT
-#include "lghd.h"
+#include "../include/lghd_catkin/lghd.h"
 
 // TODO: Move this into config file
 // Data & Debug

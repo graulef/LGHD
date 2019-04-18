@@ -16,7 +16,7 @@
 #include "image_io.h"
 #include "log_gabor_filter_bank.h"
 #include "phase_congruency.h"
-#include "lghd.h"
+#include "../include/lghd_catkin/lghd.h"
 
 // ITK
 #include <itkOpenCVImageBridge.h>
