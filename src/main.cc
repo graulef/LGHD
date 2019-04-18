@@ -22,11 +22,9 @@
 // PROJECT
 #include "../include/lghd_catkin/lghd.h"
 
-// TODO: Move this into config file
-// Data & Debug
-const std::string data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";
-const std::string save_filters_dir = data_dir + "/filters";
-const bool VERBOSE = false;
+// Global debug directories & flag
+const std::string save_debug_dir = "./debug";
+const bool debug = true;
 
 // Feature detection
 const int detection_threshold = 10;
@@ -41,7 +39,7 @@ const float good_points_portion = 1.0f; // 0.15f
 
 // Implementation guided by the paper "Multi-Image Matching using Multi-Scale Oriented Patches" by Brown, Szeliski, and Winder.
 void adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
-                                   const int num_keep) {
+                                  const int num_keep) {
     // Nothing to be maximized
     if(keypoints.size() < num_keep) {
         return;
@@ -100,11 +98,11 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
     std::cout << "Building descriptors for the " << keypoints.size() << " strongest keypoints." << std::endl;
 
     // DEBUG: store image with good keypoints
-    if (VERBOSE) {
+    if (debug) {
         cv::Mat draw;
         cv::drawKeypoints(image, keypoints, draw);
         char keypoint_filename[32];
-        sprintf(keypoint_filename, "%s/debug/%s_keypoints.jpg", data_dir.c_str(), spectrum.c_str());
+        sprintf(keypoint_filename, "%s/%s_keypoints.jpg", save_debug_dir.c_str(), spectrum.c_str());
         cv::imwrite(keypoint_filename, draw);
     }
 
@@ -112,25 +110,29 @@ std::vector<cv::KeyPoint> get_keypoints(cv::Mat image, std::string spectrum) {
 }
 
 int main(int argc, char *argv[]) {
-    LGHD descr;
+
+    const std::string load_data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";
+
+    // Create descriptor object with default settings (reused for both spectra)
+    LGHD lghd_descr_obj;
 
     // Load RGB image & detect keypoints
-    const cv::Mat rgb_image = cv::imread(data_dir + "/test_images/9_rgb.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat rgb_image = cv::imread(load_data_dir + "/test_images/9_rgb.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> rgb_kps_detected = get_keypoints(rgb_image, "rgb");
 
     // Generate LGHD descriptor for RGB
     std::vector<cv::KeyPoint> rgb_kps;
     cv::Mat rgb_descr;
-    descr.generate_descriptor(rgb_image, rgb_kps_detected, &rgb_kps, &rgb_descr);
+    lghd_descr_obj.generate_descriptor(rgb_image, rgb_kps_detected, &rgb_kps, &rgb_descr);
 
     // Load infrared image & detect keypoints
-    const cv::Mat ir_image = cv::imread(data_dir + "/test_images/9_ir.jpg", cv::IMREAD_GRAYSCALE);
+    const cv::Mat ir_image = cv::imread(load_data_dir + "/test_images/9_ir.jpg", cv::IMREAD_GRAYSCALE);
     std::vector<cv::KeyPoint> ir_kps_detected = get_keypoints(ir_image, "ir");
 
     // Generate LGHD descriptor for infrared
     std::vector<cv::KeyPoint> ir_kps;
     cv::Mat ir_descr;
-    descr.generate_descriptor(ir_image, ir_kps_detected, &ir_kps, &ir_descr);
+    lghd_descr_obj.generate_descriptor(ir_image, ir_kps_detected, &ir_kps, &ir_descr);
 
     // Use Brute-Force matcher to match descriptors
     cv::BFMatcher matcher(cv::NORM_L2, true);	
@@ -161,7 +163,7 @@ int main(int argc, char *argv[]) {
                 std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
     // Save detected matches
-    cv::imwrite(data_dir + "/results/bf_matches.jpg", img_matches);
+    cv::imwrite(load_data_dir + "/bf_matches.jpg", img_matches);
 
     return 0;
 }

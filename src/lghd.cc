@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 // PROJECT
 #include "types.h"
@@ -29,32 +31,67 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/features2d.hpp>
 
+LGHD::LGHD(const unsigned int descriptor_length,
+           const unsigned int patch_size,
+           const unsigned int num_scales,
+           const unsigned int num_orientations,
+           const unsigned int subregion_factor,
+           const std::string cache_filters_dir,
+           const bool debug,
+           const std::string save_debug_dir) :
+           descriptor_length_(descriptor_length),
+           patch_size_(patch_size),
+           num_scales_(num_scales),
+           num_orientations_(num_orientations),
+           subregion_factor_(subregion_factor),
+           cache_filters_dir_(cache_filters_dir),
+           debug_(debug),
+           save_debug_dir_(save_debug_dir){
+}
 
-void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::KeyPoint>& keypoints_in,
-			       std::vector<cv::KeyPoint>* keypoints_out, cv::Mat* descriptors_out){
+LGHD::~LGHD() {
+}
 
+void LGHD::generate_descriptor(const cv::Mat& image_in,
+                               const std::vector<cv::KeyPoint>& keypoints_in,
+			       		       std::vector<cv::KeyPoint>* keypoints_out,
+			       		       cv::Mat* descriptors_out) {
     // LOG-GABOR FILTER COLLECTION
     const unsigned int width = image_in.cols;
     const unsigned int height = image_in.rows;
 
-    // Check if filter directory exists
-    std::string save_filters_dir_local = save_filters_dir + "_" + std::to_string(width) + "_" + std::to_string(height) + "/";
+    // Check if filter directory exists and create it if not
+    std::string cache_filters_dir_local = cache_filters_dir_ + "_" + std::to_string(width) + "_" + std::to_string(height) + "/";
     bool generate_new_filters = true;
     struct stat st;
-    if(stat(save_filters_dir_local.c_str(), &st) == 0) {
+    if(stat(cache_filters_dir_local.c_str(), &st) == 0) {
         if (st.st_mode & S_IFDIR != 0) {
             generate_new_filters = false;
         }
+    }
+
+    std::cout << "generate new filers: " << generate_new_filters << std::endl;
+
+    if (generate_new_filters) {
+        // Create folder to store filters in
+        int mkdir_errno;
+        mkdir_errno = mkdir(cache_filters_dir_local.c_str(), 0777);
+
+        std::cout << "dir: " << cache_filters_dir_local << std::endl;
+        std::cout << "errno: " << mkdir_errno << std::endl;
+        std::cout << "errno: " << errno << std::endl;
+
+        assert(mkdir_errno = 0);
     }
 
     // Create a bank of 2D log-Gabor filters (you can skip this if the filters already exist in the disk).
     triple<size_t> size = {width, height, 1};
 
     log_gabor_filter_bank lg_filter(
-            save_filters_dir_local, // Filename prefix.
+            cache_filters_dir_local, // Filename prefix.
             size,                   // Filter size (z=1 for 2D).
-            num_scales,             // Scales.
-            num_orientations,       // Azimuths.
+            num_scales_,             // Scales.
+            num_orientations_,       // Azimuths.
             1,                      // Elevations (1 for 2D).
             1./3,                   // Max central frequency.
             1.6,                    // Multiplicative factor.
@@ -66,11 +103,8 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
     );
 
     if (generate_new_filters) {
-        // Create folder to store filters in
-        mkdir(save_filters_dir_local.c_str(), 0777);
+        // Write parameters and compute filters
         log_gabor_filter_bank::write_parameters(lg_filter);
-
-        // Compute filters
         lg_filter.compute();
     }
 
@@ -84,7 +118,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
 
     // Apply the phase congruency technique to detect edges and corners and other features in the 2D input image.
     phase_congruency phase_cong(
-            save_filters_dir,       // Filename prefix.
+            cache_filters_dir_,       // Filename prefix.
             image_array,            // Input image.
             &lg_filter,             // Bank of log-gabor filters.
             size,                   // Image size (z=1 for 2D).
@@ -102,13 +136,13 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
     delete[] image_array;
 
     // DEBUG: Store phase congruency image
-    if (VERBOSE) {
-        for (int i = 0; i < num_orientations*num_scales; i++){
-            int scale = round(i / num_orientations);
-            int orientation = i - scale * num_orientations;
+    if (debug_) {
+        for (int i = 0; i < num_orientations_*num_scales_; i++){
+            int scale = round(i / num_orientations_);
+            int orientation = i - scale * num_orientations_;
             char filename[64];
-            sprintf(filename, "%s/debug/%01u_orientation_%01u.jpg", data_dir.c_str(), scale + 1, orientation + 1);
-            cv::Mat current_image = eo_collection[scale * num_orientations + orientation];
+            sprintf(filename, "%s/%01u_orientation_%01u.jpg", save_debug_dir_.c_str(), scale + 1, orientation + 1);
+            cv::Mat current_image = eo_collection[scale * num_orientations_ + orientation];
             current_image.convertTo(current_image, CV_8U, 255.0);
             cv::imwrite(filename, current_image);
         }
@@ -125,7 +159,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
 
     // Iterate over all keypoints extracting a patch around it and build the LGHD (Log-Gabor histogram descriptor)
     int kp_num = 0;
-    const int patch_half = floor(patch_size/2);
+    const int patch_half = floor(patch_size_/2);
 
     for (auto const& kp : keypoints_in) {
         // Define vector holding the actual descriptor
@@ -145,29 +179,29 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
         cv::Rect patch_roi(x_1, y_1, x_2-x_1, y_2-y_1);
 
         // ignore patches that are not well-sized
-        if (y_2 - y_1 != patch_size || x_2 - x_1 != patch_size) {
+        if (y_2 - y_1 != patch_size_ || x_2 - x_1 != patch_size_) {
             ignored_kps++;
             continue;
         }
 
         // iterate over all scales building a partial descriptor for each (eo stands for edge orientation)
-        for (int s = 0; s < num_scales; s++) {
+        for (int s = 0; s < num_scales_; s++) {
             // Allocate memory for each patch (get updated) and overall maximum patch
-            cv::Mat eo_patch = cv::Mat::zeros(cv::Size(patch_size, patch_size), CV_32F);
-            cv::Mat max_eo_patch = cv::Mat::zeros(cv::Size(patch_size, patch_size), CV_32F);
+            cv::Mat eo_patch = cv::Mat::zeros(cv::Size(patch_size_, patch_size_), CV_32F);
+            cv::Mat max_eo_patch = cv::Mat::zeros(cv::Size(patch_size_, patch_size_), CV_32F);
 
             // Init max image to value bigger than number of orientations (0..5 -> 6) to easily detect unchanged values
-            cv::Mat max_idx_eo_patch = cv::Mat::ones(cv::Size(patch_size, patch_size), CV_8U) * num_orientations;
+            cv::Mat max_idx_eo_patch = cv::Mat::ones(cv::Size(patch_size_, patch_size_), CV_8U) * num_orientations_;
 
             // Iterate over all orientations and find maximize phase congruency
-            for (int o = 0; o < num_orientations; o++) {
+            for (int o = 0; o < num_orientations_; o++) {
 
                 // Load patch
-                eo_patch = eo_collection[s * num_orientations + o](patch_roi);
+                eo_patch = eo_collection[s * num_orientations_ + o](patch_roi);
 
                 // Iterate over whole patch and compare to current max patch
-                for (int i = 0; i < patch_size; i++) {
-                    for (int j = 0; j < patch_size; j++) {
+                for (int i = 0; i < patch_size_; i++) {
+                    for (int j = 0; j < patch_size_; j++) {
 
                         float current_max = max_eo_patch.at<float>(i, j);
                         float current_value = eo_patch.at<float>(i, j);
@@ -181,14 +215,14 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
             }
 
             // Set parameters for histogram generation
-            int hist_size = num_orientations;
-            float range[] = {0.0, 1.0 * (num_orientations-1)};
+            int hist_size = num_orientations_;
+            float range[] = {0.0, 1.0 * (num_orientations_-1)};
             const float* hist_range = {range};
-            int subregion_size = round(patch_size / subregion_factor);
+            int subregion_size = round(patch_size_ / subregion_factor_);
 
             // Divide patch into subregions
-            for (int i = 0; i < subregion_factor; i++){
-                for (int j = 0; j < subregion_factor; j++) {
+            for (int i = 0; i < subregion_factor_; i++){
+                for (int j = 0; j < subregion_factor_; j++) {
 
                     // Define subregion as rectangular region of interest
                     cv::Rect subregion_roi(i*subregion_size, j*subregion_size, subregion_size, subregion_size);
@@ -197,7 +231,7 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
                     const cv::Mat hist_image = max_idx_eo_patch(subregion_roi);
 
                     // Define histogram result container
-                    cv::Mat hist(cv::Size(1, num_orientations), CV_32F);
+                    cv::Mat hist(cv::Size(1, num_orientations_), CV_32F);
 
                     // Calculate histogram (uniform sampling, no accumulation)
                     cv::calcHist(&hist_image, 1, 0, cv::Mat(), hist, 1, &hist_size, &hist_range, true, false);
@@ -251,9 +285,9 @@ void LGHD::generate_descriptor(const cv::Mat& image_in, const std::vector<cv::Ke
     }
 
     // DEBUG: Store descriptors
-    if (VERBOSE) {
+    if (debug_) {
         char descr_filename[32];
-        sprintf(descr_filename, "%s/debug/descriptors.json", data_dir.c_str());
+        sprintf(descr_filename, "%s/descriptors.json", save_debug_dir_.c_str());
         cv::FileStorage descr_file(descr_filename, cv::FileStorage::WRITE);
         descr_file << "matName" << descr;
     }
