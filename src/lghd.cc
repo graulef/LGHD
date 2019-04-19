@@ -30,7 +30,8 @@
 #include <opencv2/features2d.hpp>
 
 
-LGHD::LGHD(const unsigned int descriptor_length,
+LGHD::LGHD(const std::string &spectrum,
+           const unsigned int descriptor_length,
            const unsigned int patch_size,
            const unsigned int num_scales,
            const unsigned int num_orientations,
@@ -38,6 +39,7 @@ LGHD::LGHD(const unsigned int descriptor_length,
            const std::string cache_filters_dir,
            const bool debug,
            const std::string save_debug_dir) :
+           spectrum_(spectrum),
            descriptor_length_(descriptor_length),
            patch_size_(patch_size),
            num_scales_(num_scales),
@@ -80,7 +82,7 @@ void LGHD::adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
         for(int j = 0; j < i && keypoints[j].response > response; ++j) {
             radius = std::min(radius, cv::norm(keypoints[i].pt - keypoints[j].pt));
         }
-        radii[i]       = radius;
+        radii[i] = radius;
         radii_sorted[i] = radius;
     }
 
@@ -105,6 +107,8 @@ void LGHD::adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
 void LGHD::generate_descriptor(const cv::Mat& image_in,
                                std::vector<cv::KeyPoint>* keypoints_out,
 			       		       cv::Mat* descriptors_out) {
+    std::cout << "spectrum : " << spectrum_ << std::endl;
+
     // LOG-GABOR FILTER COLLECTION
     const unsigned int width = image_in.cols;
     const unsigned int height = image_in.rows;
@@ -199,8 +203,8 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
     if (debug_) {
         cv::Mat draw;
         cv::drawKeypoints(keypoint_image, keypoints, draw);
-        char keypoint_filename[32];
-        sprintf(keypoint_filename, "%s/keypoints.jpg", save_debug_dir_.c_str());
+        char keypoint_filename[512];
+        sprintf(keypoint_filename, "%s/%s_keypoints.jpg", save_debug_dir_.c_str(), spectrum_.c_str());
         cv::imwrite(keypoint_filename, draw);
     }
 
@@ -215,8 +219,8 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
         for (int i = 0; i < num_orientations_*num_scales_; i++){
             int scale = round(i / num_orientations_);
             int orientation = i - scale * num_orientations_;
-            char filename[64];
-            sprintf(filename, "%s/%01u_orientation_%01u.jpg", save_debug_dir_.c_str(), scale + 1, orientation + 1);
+            char filename[512];
+            sprintf(filename, "%s/%s_%01u_orientation_%01u.jpg", save_debug_dir_.c_str(), spectrum_.c_str(), scale + 1, orientation + 1);
             cv::Mat current_image = eo_collection[scale * num_orientations_ + orientation];
             current_image.convertTo(current_image, CV_8U, 255.0);
             cv::imwrite(filename, current_image);
@@ -362,8 +366,8 @@ void LGHD::generate_descriptor(const cv::Mat& image_in,
 
     // DEBUG: Store descriptors
     if (debug_) {
-        char descr_filename[32];
-        sprintf(descr_filename, "%s/descriptors.json", save_debug_dir_.c_str());
+        char descr_filename[512];
+        sprintf(descr_filename, "%s/%s_descriptors.json", save_debug_dir_.c_str(), spectrum_.c_str());
         cv::FileStorage descr_file(descr_filename, cv::FileStorage::WRITE);
         descr_file << "matName" << descr;
     }

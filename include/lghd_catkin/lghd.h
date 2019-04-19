@@ -33,14 +33,15 @@ class LGHD {
      * @param[in] save_debug_dir        Directory where debug files are stored.
      */
 
-    LGHD(const unsigned int descriptor_length = 384,
+    LGHD(const std::string &spectrum,
+         const unsigned int descriptor_length = 384,
          const unsigned int patch_size = 100,
          const unsigned int num_scales = 4,
          const unsigned int num_orientations = 6,
          const unsigned int subregion_factor = 4,
          const std::string cache_filters_dir = "./filters",
          const bool debug = true,
-         const std::string save_debug_dir = "./debug");
+         const std::string save_debug_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data"); // default: "./debug"
 
     /**
      * @brief Destructor method.
@@ -77,8 +78,9 @@ class LGHD {
     const int good_points_max = 200; // 50
     const float good_points_portion = 1.0f; // 0.15f
 
-    const bool use_pc_maps_detection_ = false;
+    const bool use_pc_maps_detection_ = true;
 
+    const std::string &spectrum_;
     const unsigned int descriptor_length_;
     const unsigned int patch_size_;
     const unsigned int num_scales_;
