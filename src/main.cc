@@ -25,71 +25,16 @@
 // PROJECT
 #include "../include/lghd_catkin/lghd.h"
 
-// Feature detection
-const int detection_threshold = 10;
-const int high_quality_subset_size = 500;
-
-// Adaptive Non-Maximum Suppression (see paper)
-const float robust_coeff = 1.11;
 
 // Selection of matches based on percentile
-const int good_points_max = 500; // 50
+const int good_points_max = 1000; // 50
 const float good_points_portion = 1.0f; // 0.15f
-
-
-// Implementation guided by the paper "Multi-Image Matching using Multi-Scale Oriented Patches" by Brown, Szeliski, and Winder.
-void adaptiveNonMaximalSuppresion(std::vector<cv::KeyPoint>& keypoints,
-                                  const int num_keep) {
-    // Nothing to be maximized
-    if(keypoints.size() < num_keep) {
-        return;
-    }
-
-    // Sort by response to detection filter
-    std::sort(keypoints.begin(), keypoints.end(),
-               [&](const cv::KeyPoint& lhs, const cv::KeyPoint& rhs) {
-                   return lhs.response > rhs.response;
-               });
-
-    std::vector<cv::KeyPoint> anms_points;
-    std::vector<double> radii;
-    radii.resize(keypoints.size());
-    std::vector<double> radii_sorted;
-    radii_sorted.resize(keypoints.size());
-
-    // Create list of keypoints sorted by maximum-response radius
-    for(int i = 0; i < keypoints.size(); ++i) {
-        const float response = keypoints[i].response * robust_coeff;
-        double radius = std::numeric_limits<double>::max();
-        for(int j = 0; j < i && keypoints[j].response > response; ++j) {
-            radius = std::min(radius, cv::norm(keypoints[i].pt - keypoints[j].pt));
-        }
-        radii[i]       = radius;
-        radii_sorted[i] = radius;
-    }
-
-    std::sort(radii_sorted.begin(), radii_sorted.end(),
-               [&](const double& lhs, const double& rhs) {
-                   return lhs > rhs;
-               } );
-
-    // Only keep keypoints with highest radii
-    const double decision_radius = radii_sorted[num_keep];
-    for(int i = 0; i < radii.size(); ++i) {
-        if(radii[i] >= decision_radius) {
-            anms_points.push_back(keypoints[i]);
-        }
-    }
-
-    // Allocate result to output
-    anms_points.swap(keypoints);
-}
 
 
 int main(int argc, char *argv[]) {
 
     const std::string load_data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";
-    const std::string input_index = "3";
+    const std::string input_index = "4";
 
     // Create descriptor object for RGB
     LGHD lghd_descr_rgb_obj(input_index + "/rgb");
@@ -115,13 +60,16 @@ int main(int argc, char *argv[]) {
     cv::Mat ir_descr;
     lghd_descr_ir_obj.generate_descriptor(ir_image, &ir_kps, &ir_descr);
 
-    // Use Brute-Force matcher to match descriptors
-    cv::BFMatcher matcher(cv::NORM_L2, true);	
+    // Use Brute-Force matcher to match descriptors // TODO: Try out knnMatch & Lowe ratio test
+    const bool cross_check = true;
+    cv::BFMatcher matcher(cv::NORM_L2, cross_check);
     std::vector<cv::DMatch> matches;
     matcher.match(rgb_descr, ir_descr, matches);
 
     std::cout << "Number of IR keypoints: " << ir_kps.size() << std::endl;
     std::cout << "Number of IR descriptors: " << ir_descr.size() << std::endl;
+
+    std::cout << "Number of matches before filtering: " << matches.size() << std::endl;
 
     // Sort matches and preserve top percentile of matches (good_points_portion)
     std::sort(matches.begin(), matches.end());
@@ -145,6 +93,8 @@ int main(int argc, char *argv[]) {
     // Save detected matches
     cv::imwrite(load_data_dir + "/" + input_index + "/bf_matches.jpg", img_matches);
 
+    std::cout << "Number of matches after filtering: " << good_matches.size() << std::endl;
+
     // Extract corresponding patches from both images
 
     // Get the keypoints from the good matches
@@ -161,16 +111,62 @@ int main(int argc, char *argv[]) {
     const int patch_half = patch_size_ / 2;
 
     // Find homography between the two images
-    const double ransacReprojThreshold = 3;
-    const int maxIters = 20000;
-    const double confidence = 0.995;
 
-    cv::Mat H = cv::findHomography(rgb_kps_good, ir_kps_good, cv::RANSAC, ransacReprojThreshold, cv::noArray(), maxIters, confidence);
+    // First using RANSAC to filter outliers
+    double ransacReprojThreshold = 10;
+    const int maxIters = 20000000;
+    const double confidence = 0.95;
+
+    cv::Mat inlier_mask(cv::Size(1, good_matches.size()), CV_8U);
+    std::vector<cv::Point2f> rgb_inliers;
+    std::vector<cv::Point2f> rgb_outliers;
+    std::vector<cv::Point2f> ir_inliers;
+    std::vector<cv::Point2f> ir_outliers;
+
+    cv::Mat H_init = cv::findHomography(rgb_kps_good, ir_kps_good, cv::RANSAC, ransacReprojThreshold, inlier_mask, maxIters, confidence);
 
     // Warp IR patch back to RGB space
     cv::Mat ir_image_warped(cv::Size(width, height), CV_8U);
-    cv::warpPerspective(ir_image, ir_image_warped, H, ir_image_warped.size(), cv::INTER_NEAREST+cv::WARP_INVERSE_MAP);
-    cv::imwrite(load_data_dir + "/" + input_index + "/ir_warped.jpg", ir_image_warped);
+    cv::warpPerspective(ir_image, ir_image_warped, H_init, ir_image_warped.size(), cv::INTER_NEAREST+cv::WARP_INVERSE_MAP);
+    cv::imwrite(load_data_dir + "/" + input_index + "/ir_warped_init_H.jpg", ir_image_warped);
+
+    std::cout << "Inliers mask size: " << inlier_mask.size() << std::endl;
+    std::cout << "Initial H = " << H_init << std::endl;
+
+    for (int i = 0; i < rgb_kps_good.size(); i++) {
+        if (inlier_mask.at<bool>(i)){
+            rgb_inliers.push_back(rgb_kps_good.at(i));
+            ir_inliers.push_back(ir_kps_good.at(i));
+        } else {
+            rgb_outliers.push_back(rgb_kps_good.at(i));
+            ir_outliers.push_back(ir_kps_good.at(i));
+        }
+    }
+
+    std::cout << "Inliers: " << rgb_inliers.size() << ", Outliers: " << rgb_outliers.size() << std::endl;
+
+    // TODO: draw inlier & outlier set
+//    // Draw matches onto image
+//    cv::Mat img_inliers;
+//    drawMatches(rgb_image, rgb_inliers, ir_image, ir_inliers,
+//                good_matches, img_inliers, cv::Scalar::all(-1), cv::Scalar::all(-1),
+//                std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+//
+//    // Save detected matches
+//    cv::imwrite(load_data_dir + "/" + input_index + "/ransac_inliers.jpg", img_inliers);
+
+
+    // Repeat using LMEDS and inliers only
+    ransacReprojThreshold = 3;
+    cv::Mat H = cv::findHomography(rgb_inliers, ir_inliers, cv::LMEDS, ransacReprojThreshold, inlier_mask);
+    std::cout << "Refined H = " << H << std::endl;
+
+    std::cout << "Inliers mask size refined: " << inlier_mask.size() << std::endl;
+    std::cout << "Inliers mask refined: " << inlier_mask << std::endl;
+
+    // Warp IR patch back to RGB space
+    //cv::warpPerspective(ir_image, ir_image_warped, H, ir_image_warped.size(), cv::INTER_NEAREST+cv::WARP_INVERSE_MAP);
+    //cv::imwrite(load_data_dir + "/" + input_index + "/ir_warped.jpg", ir_image_warped);
 
     cv::FileStorage file(load_data_dir + "/" + input_index + "/homography.txt", cv::FileStorage::WRITE);
     file << "H" << H;

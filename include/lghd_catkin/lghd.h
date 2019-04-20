@@ -35,7 +35,7 @@ class LGHD {
 
     LGHD(const std::string &spectrum,
          const unsigned int descriptor_length = 384,
-         const unsigned int patch_size = 100,
+         const unsigned int patch_size = 80,
          const unsigned int num_scales = 4,
          const unsigned int num_orientations = 6,
          const unsigned int subregion_factor = 4,
@@ -69,14 +69,10 @@ class LGHD {
 
     // Feature detection
     const int detection_threshold = 10;
-    const int high_quality_subset_size = 400;
+    const int high_quality_subset_size = 200;
 
     // Adaptive Non-Maximum Suppression (see paper)
     const float robust_coeff = 1.11;
-
-    // Selection of matches based on percentile
-    const int good_points_max = 200; // 50
-    const float good_points_portion = 1.0f; // 0.15f
 
     const bool use_pc_maps_detection_ = true;
 
