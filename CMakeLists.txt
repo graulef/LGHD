@@ -15,8 +15,8 @@ find_package(GSL REQUIRED)
 include_directories(${GSL_INCLUDE_DIRS})
 
 # TODO: Add FFTW as a working and required dependecy such that throws error during build process
-#find_package(FFTW3 REQUIRED)
-#include_directories(${FFTW3_INCLUDE_DIRS})
+find_package(FFTW3 REQUIRED)
+include_directories(${FFTW3_INCLUDE_DIRS})
 
 
 #############
@@ -48,7 +48,7 @@ cs_add_executable(${PROJECT_NAME}
  src/main.cc
 )
 
-add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS}})
+# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_lib)
 target_link_libraries(${PROJECT_NAME} ${ITK_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${GSL_LIBRARIES})
@@ -61,7 +61,7 @@ target_link_libraries(${PROJECT_NAME}_lib ${catkin_LIBRARIES})
 #############
 FILE(GLOB_RECURSE LibFiles "include/*h" "config/*.yaml" "launch/*.launch" "rviz/*.rviz")
 add_custom_target(headers SOURCES ${LibFiles})
-  
+
 ##########
 # EXPORT #
 ##########
