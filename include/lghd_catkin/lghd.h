@@ -34,6 +34,7 @@ class LGHD {
      */
 
     LGHD(const std::string &spectrum,
+         const std::string &input_index = "",
          const unsigned int descriptor_length = 384,
          const unsigned int patch_size = 80,
          const unsigned int num_scales = 4,
@@ -68,14 +69,15 @@ class LGHD {
     // TODO: Add spectrum to create more meaningful debug files
 
     // Feature detection
-    const int detection_threshold = 10;
-    const int high_quality_subset_size = 200;
+    const int detection_threshold = 5;
 
     // Adaptive Non-Maximum Suppression (see paper)
+    const int high_quality_subset_size = 1000;
     const float robust_coeff = 1.11;
 
     const bool use_pc_maps_detection_ = true;
 
+    const std::string &input_index_;
     const std::string &spectrum_;
     const unsigned int descriptor_length_;
     const unsigned int patch_size_;
