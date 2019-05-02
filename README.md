@@ -57,9 +57,14 @@ More details about phase congruency and some of its applications can be found in
 ## Dependencies
 
 - [CMake 3.6](https://cmake.org)
+- [OpenCV 3](https://opencv.org)
 - [FFTW 3.3](http://www.fftw.org)
 - [GSL 2.2](https://www.gnu.org/software/gsl)
 - [ITK 4.10](https://www.itk.org)
+
+OpenCV should be installed before ITK, so that the OpenCVBridge module for ITK can be properly compiled. To compile this module, [build ITK](https://cmake.org/Wiki/ITK_Release_4/Video/HowToBuildVideoModules) with the cmake flag `Module_ITKVideoBridgeOpenCV=ON`.
+
+Further, for the FFTW dependencies to work properly, you need to build using CMake rather than the standard `./configure` command, as specified in the standard build directions. This relates to an [issue](https://github.com/FFTW/fftw3/issues/130) to ensure CMake can properly find the package. The build requires these CMake flags: `-DENABLE_FLOAT=ON -DENABLE_SSE=ON -DENABLE_SSE2=ON -DENABLE_THREADS=ON` (the SSE flags may or may not be required for your system).
 
 In case you are experiencing troubles connected to VTK: I recommend installing vtk-6, since it is also used for ROS packages like ros-pcl and having both vtk-5 & vtk-6 is not possible. However, having vtk-6 installed will lead to CMake warnings. See here how to get rid of them: https://github.com/autowarefoundation/autoware/issues/795 
 
