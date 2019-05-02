@@ -9,7 +9,7 @@
 #include "phase_congruency.h"
 
 // OpenCV
-#include <opencv2/highgui.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 
 phase_congruency::phase_congruency(

@@ -42,7 +42,7 @@ class LGHD {
          const unsigned int subregion_factor = 4,
          const std::string cache_filters_dir = "./filters",
          const bool debug = true,
-         const std::string save_debug_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data"); // default: "./debug"
+         const std::string save_debug_dir = "/home/graulef/catkin_ws_amo/src/aerial_mapper_optimization/dependencies/LGHD/data"); // default: "./debug"
 
     /**
      * @brief Destructor method.

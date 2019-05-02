@@ -14,9 +14,9 @@
 // OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/utility.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgcodecs/imgcodecs.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -145,11 +145,12 @@ void generate_sift_descriptor(const cv::Mat& image_in,
 
 void run(std::string input_index, std::string method) {
 
-    const std::string load_data_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data";
-    const std::string save_debug_dir = "/home/graulef/catkin_ws_amo/src/lghd_catkin/data/" + input_index;
+    const std::string load_data_dir = "/home/graulef/catkin_ws_amo/src/aerial_mapper_optimization/dependencies/LGHD/data";
+    const std::string save_debug_dir = "/home/graulef/catkin_ws_amo/src/aerial_mapper_optimization/dependencies/LGHD/data" + input_index;
 
     // Load RGB image
     const cv::Mat rgb_image = cv::imread(load_data_dir + "/test_images/" + input_index + "_rgb.jpg", cv::IMREAD_GRAYSCALE);
+    std::cout << load_data_dir + "/test_images/" + input_index + "_rgb.jpg" << std::endl;
     cv::Mat rgb_image_c = cv::imread(load_data_dir + "/test_images/" + input_index + "_rgb.jpg", cv::IMREAD_COLOR);
     cv::applyColorMap(rgb_image_c, rgb_image_c, cv::COLORMAP_BONE);
 
@@ -165,10 +166,10 @@ void run(std::string input_index, std::string method) {
 
     if (method == "lghd") {
         // Create descriptor for RGB
-        LGHD lghd_descr_rgb_obj(input_index, "/rgb");
+        LGHD lghd_descr_rgb_obj("/rgb", input_index);
         lghd_descr_rgb_obj.generate_descriptor(rgb_image, &rgb_kps, &rgb_descr);
         // Generate descriptor for infrared
-        LGHD lghd_descr_ir_obj(input_index, "/ir");
+        LGHD lghd_descr_ir_obj("/ir", input_index);
         lghd_descr_ir_obj.generate_descriptor(ir_image, &ir_kps, &ir_descr);
     } else if (method == "sift") {
         // Create descriptor for RGB
@@ -417,7 +418,7 @@ void run(std::string input_index, std::string method) {
 
 int main(int argc, char *argv[]) {
     std::vector<std::string> data_index_vec = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"};
-    std::string method = "sift"; // choose lghd, sift or brisk
+    std::string method = "lghd"; // choose lghd, sift or brisk
     ;
     for (auto const& idx : data_index_vec){
         run(idx, method);
